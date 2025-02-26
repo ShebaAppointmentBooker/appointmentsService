@@ -19,7 +19,7 @@ interface IAppointmentType {
 
 interface IAppointment extends Document {
   doctor: Types.ObjectId | IDoctor;
-  patient?: Types.ObjectId;
+  patient?: Types.ObjectId|null;
   date: Date;
   type: Types.ObjectId | ISpecialization; // Reference to Specialization
   subtype: Types.ObjectId | IAppointmentType; // Reference to AppointmentType

@@ -1,16 +1,29 @@
 // /models/patientModel.ts
-import mongoose from 'mongoose';
+import mongoose, { Schema, Document } from "mongoose";
 
-const patientSchema = new mongoose.Schema({
-  name: { type: String, required: true },
-  email: { type: String, required: true },
-  nationalId: { type: String, required: true, unique: true },
-  medicalHistory: { type: String },
-  phone: { type: String },
-  refreshToken: { type: String, default: "" },
-  createdAt: { type: Date, default: Date.now }
-});
+interface IPatient extends Document {
+  name: string;
+  email: string;
+  nationalId: string;
+  phone?: string;
+  medicalHistory?:string;
+  refreshToken:string;
+  appointments: Schema.Types.ObjectId[]; // Array of appointment references
+}
 
-const Patient = mongoose.model('Patient', patientSchema);
+const patientSchema = new Schema<IPatient>(
+  {
+    name: { type: String, required: true },
+    email: { type: String, required: true, unique: true },
+    nationalId: { type: String, required: true, unique: true },
+    phone: { type: String },
+    medicalHistory: { type: String },
+    refreshToken: { type: String, default: "" },
+    appointments: [{ type: Schema.Types.ObjectId, ref: "Appointment" }], // Reference to Appointment model
+  },
+  { timestamps: true }
+);
+
+const Patient = mongoose.model<IPatient>("Patient", patientSchema);
 
 export default Patient;
