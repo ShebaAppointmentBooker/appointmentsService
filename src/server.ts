@@ -1,8 +1,8 @@
 import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import * as dotenv from 'dotenv'
-import doctorRoutes from './routes/doctorRoutes';
-import patientRoutes from './routes/patientRoutes';
+import appointmentRoutes from './routes/appointmentRoutes';
+
 
 dotenv.config();
 
@@ -23,9 +23,8 @@ const connectDB = async () => {
 connectDB();
 
 // Use routes
-app.use('/api/doctors', doctorRoutes);
-app.use('/api/patients', patientRoutes);
+app.use('/api/appointments', appointmentRoutes);
 
-app.listen(5000, () => {
+app.listen(5001, () => {
   console.log('Server running on port 5000');
 });
