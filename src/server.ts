@@ -23,8 +23,8 @@ const connectDB = async () => {
 connectDB();
 
 // Use routes
-app.use('/api/appointments', appointmentRoutes);
+app.use('/appointments', appointmentRoutes);
 
 app.listen(5001, () => {
-  console.log('Server running on port 5000');
+  console.log('Server running on port 5001');
 });
