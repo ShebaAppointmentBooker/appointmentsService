@@ -13,6 +13,8 @@ import { IDoctor } from "../models/doctorModel";
 import Specialization, { ISpecialization } from "../models/specializationModel";
 import mongoose from "mongoose";
 import Patient from "../models/patientModel";
+import Doctor from "../models/doctorModel";
+require("../models/doctorModel");
 export const getAllAppointmentTypes = async (req: Request, res: Response) => {
   try {
     const appointmentTypes = await AppointmentType.find();
@@ -49,7 +51,7 @@ export const getAvailableAppointmentsByType = async (
 ): Promise<any> => {
   try {
     const { type } = req.body;
-
+    console.log(type)
     if (!type || typeof type !== "string" || type.trim() === "") {
       return res.status(400).json({
         error: "Appointment type is required and must be a non-empty string.",
@@ -57,7 +59,7 @@ export const getAvailableAppointmentsByType = async (
     }
 
     // Find the matching AppointmentType by name
-    const appointmentType = await AppointmentType.findOne({ name: type });
+    const appointmentType = await Specialization.findOne({ name: type });
     if (!appointmentType) {
       return res.status(404).json({ error: "Appointment type not found." });
     }
@@ -65,7 +67,7 @@ export const getAvailableAppointmentsByType = async (
     // Find all available appointments with the specified subtype
     const appointments = await Appointment.find({
       status: "Available",
-      subtype: appointmentType._id,
+      type: appointmentType._id,
     })
       .populate("doctor", "name email")
       .populate("type", "name")
@@ -83,7 +85,7 @@ export const getAvailableAppointmentsByType = async (
       specialization: (appointment.type as ISpecialization).name,
       appointmentType: (appointment.subtype as IAppointmentType).name,
     }));
-
+    console.log(formattedAppointments)
     res.json(formattedAppointments);
   } catch (error) {
     console.error("Error fetching appointments:", error);
