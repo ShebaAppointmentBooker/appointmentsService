@@ -15,6 +15,7 @@ import mongoose from "mongoose";
 import Patient from "../models/patientModel";
 import Doctor from "../models/doctorModel";
 require("../models/doctorModel");
+require("../models/appointmentTypeModel");
 export const getAllAppointmentTypes = async (req: Request, res: Response) => {
   try {
     const appointmentTypes = await AppointmentType.find();
@@ -45,30 +46,95 @@ export const getAllSpecializations = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Internal server error." });
   }
 };
+export const getDoctorsBySpecialization = async (
+  req: Request,
+  res: Response
+) => {
+  try {
+    const { specializationId } = req.body;
+
+    if (specializationId && typeof specializationId !== "string") {
+      res
+        .status(400)
+        .json({ message: "Specialization ID must be a valid string." });
+      return;
+    }
+
+    // Fetch doctors based on specialization or all if none provided
+    const filter = specializationId
+      ? { specializations: specializationId }
+      : {};
+
+    const doctors = await Doctor.find(filter)
+      .populate("specializations", "name")
+      .select("name email phone specializations");
+
+    res.status(200).json(doctors);
+  } catch (error) {
+    console.error("Error fetching doctors by specialization:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 export const getAvailableAppointmentsByType = async (
   req: Request,
   res: Response
 ): Promise<any> => {
   try {
-    const { type } = req.body;
-    console.log(type)
+    const { type, subtype, doctorId, date } = req.body;
+    console.log("Filters received:", { type, subtype, doctorId, date });
     if (!type || typeof type !== "string" || type.trim() === "") {
       return res.status(400).json({
         error: "Appointment type is required and must be a non-empty string.",
       });
     }
-
+    if (subtype && (typeof subtype !== "string" || subtype.trim() === "")) {
+      return res.status(400).json({
+        error: "Subtype must be a non-empty string if provided.",
+      });
+    }
+    if (doctorId && (typeof doctorId !== "string" || doctorId.trim() === "")) {
+      return res.status(400).json({
+        error: "Doctor ID must be a non-empty string if provided.",
+      });
+    }
+    if (date && isNaN(Date.parse(date))) {
+      return res.status(400).json({
+        error: "Invalid date format. Please provide a valid date string.",
+      });
+    }
     // Find the matching AppointmentType by name
     const appointmentType = await Specialization.findOne({ name: type });
     if (!appointmentType) {
       return res.status(404).json({ error: "Appointment type not found." });
     }
-
-    // Find all available appointments with the specified subtype
-    const appointments = await Appointment.find({
+    const query: any = {
       status: "Available",
       type: appointmentType._id,
-    })
+    };
+    if (subtype) {
+      const appointmentSubtype = await AppointmentType.findOne({
+        name: subtype,
+      });
+      if (!appointmentSubtype) {
+        return res
+          .status(404)
+          .json({ error: "Appointment subtype not found." });
+      }
+      query.subtype = appointmentSubtype._id;
+    }
+
+    if (doctorId) {
+      query.doctor = doctorId;
+    }
+
+    if (date) {
+      const startDate = new Date(date);
+      const endDate = new Date(startDate);
+      endDate.setMinutes(endDate.getMinutes() + 59); // Covers full hour range
+      query.date = { $gte: startDate, $lt: endDate };
+    }
+    // Find all available appointments with the specified subtype
+    const appointments = await Appointment.find(query)
       .populate("doctor", "name email")
       .populate("type", "name")
       .populate("subtype", "name");
@@ -85,7 +151,7 @@ export const getAvailableAppointmentsByType = async (
       specialization: (appointment.type as ISpecialization).name,
       appointmentType: (appointment.subtype as IAppointmentType).name,
     }));
-    console.log(formattedAppointments)
+    console.log(formattedAppointments);
     res.json(formattedAppointments);
   } catch (error) {
     console.error("Error fetching appointments:", error);
