@@ -3,8 +3,6 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { Request, Response } from "express";
-import { refreshTokenHandler } from "../handlers/refreshTokenHandler";
-import { loginWithOtpHandler, requestOtpHandler } from "../handlers/otpHandler";
 import AppointmentType, {
   IAppointmentType,
 } from "../models/appointmentTypeModel";
@@ -51,6 +49,7 @@ export const getDoctorsBySpecialization = async (
   res: Response
 ) => {
   try {
+    console.log("entered")
     const { specializationId } = req.body;
 
     if (specializationId && typeof specializationId !== "string") {
@@ -103,24 +102,24 @@ export const getAvailableAppointmentsByType = async (
       });
     }
     // Find the matching AppointmentType by name
-    const appointmentType = await Specialization.findOne({ name: type });
-    if (!appointmentType) {
-      return res.status(404).json({ error: "Appointment type not found." });
-    }
+    // const appointmentType = await Specialization.findOne({ _id: type });
+    // if (!appointmentType) {
+    //   return res.status(404).json({ error: "Appointment type not found." });
+    // }
     const query: any = {
       status: "Available",
-      type: appointmentType._id,
+      type: type,
     };
     if (subtype) {
-      const appointmentSubtype = await AppointmentType.findOne({
-        name: subtype,
-      });
-      if (!appointmentSubtype) {
-        return res
-          .status(404)
-          .json({ error: "Appointment subtype not found." });
-      }
-      query.subtype = appointmentSubtype._id;
+      // const appointmentSubtype = await AppointmentType.findOne({
+      //   _di: subtype,
+      // });
+      // if (!appointmentSubtype) {
+      //   return res
+      //     .status(404)
+      //     .json({ error: "Appointment subtype not found." });
+      // }
+      query.subtype = subtype;
     }
 
     if (doctorId) {
@@ -128,11 +127,15 @@ export const getAvailableAppointmentsByType = async (
     }
 
     if (date) {
-      const startDate = new Date(date);
-      const endDate = new Date(startDate);
-      endDate.setMinutes(endDate.getMinutes() + 59); // Covers full hour range
-      query.date = { $gte: startDate, $lt: endDate };
+      const selectedDate = new Date(date);
+      selectedDate.setUTCHours(0, 0, 0, 0); // Set to start of day
+
+      const nextDay = new Date(selectedDate);
+      nextDay.setUTCDate(nextDay.getUTCDate() + 1); // Move to the next day
+
+      query.date = { $gte: selectedDate, $lt: nextDay };
     }
+    console.log(query)
     // Find all available appointments with the specified subtype
     const appointments = await Appointment.find(query)
       .populate("doctor", "name email")

@@ -26,7 +26,9 @@ export const jwtRequired = (
   const token = authHeader.split(" ")[1];
 
   try {
+    console.log(token)
     const decoded = jwt.verify(token, JWT_SECRET);
+    console.log("valid token, next ",decoded)
     req.user = decoded;
     next();
   } catch (error) {
