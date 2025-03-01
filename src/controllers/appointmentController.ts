@@ -12,6 +12,8 @@ import Specialization, { ISpecialization } from "../models/specializationModel";
 import mongoose from "mongoose";
 import Patient from "../models/patientModel";
 import Doctor from "../models/doctorModel";
+import transporter from "../tools/mailer"; // Import the transporter
+import { generateAppointmentEmail } from "../helpers/emailConstructorPatient";
 require("../models/doctorModel");
 require("../models/appointmentTypeModel");
 export const getAllAppointmentTypes = async (req: Request, res: Response) => {
@@ -49,7 +51,7 @@ export const getDoctorsBySpecialization = async (
   res: Response
 ) => {
   try {
-    console.log("entered")
+    console.log("entered");
     const { specializationId } = req.body;
 
     if (specializationId && typeof specializationId !== "string") {
@@ -135,7 +137,7 @@ export const getAvailableAppointmentsByType = async (
 
       query.date = { $gte: selectedDate, $lt: nextDay };
     }
-    console.log(query)
+    console.log(query);
     // Find all available appointments with the specified subtype
     const appointments = await Appointment.find(query)
       .populate("doctor", "name email")
@@ -177,7 +179,10 @@ export const bookAppointment = async (
       return res.status(400).json({ error: "Appointment ID is required." });
     }
 
-    const appointment = await Appointment.findById(appointmentId);
+    const appointment = await Appointment.findById(appointmentId)
+      .populate("type") // Populate the type field (appointment type)
+      .populate("doctor") // Populate the doctor field (if necessary)
+      .populate("subtype"); // Populate the subtype field (if necessary)
 
     if (!appointment) {
       return res.status(404).json({ error: "Appointment not found." });
@@ -199,7 +204,34 @@ export const bookAppointment = async (
     await Patient.findByIdAndUpdate(patientObjectId, {
       $push: { appointments: appointment._id },
     });
-
+    // Fetch patient details for email
+    const patient = await Patient.findById(patientObjectId);
+    if (!patient || !patient.email) {
+      return res.status(500).json({ error: "Patient email not found." });
+    }
+    // Generate email content
+    const emailContent = generateAppointmentEmail(patient.name, {
+      date: appointment.date,
+      doctor: (appointment.doctor as IDoctor).name,
+      specialization: (appointment.type as ISpecialization).name,
+    });
+    // Send email to patient
+    const mailOptions = {
+      from: process.env.EMAIL_USER, // Using environment variable for the sender
+      to: patient.email,
+      subject: "Appointment Confirmation",
+      html: emailContent,
+    };
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error("Error sending email:", error);
+        return res
+          .status(500)
+          .json({ error: "Error sending confirmation email." });
+      } else {
+        console.log("Email sent: " + info.response);
+      }
+    });
     res.json({ message: "Appointment booked successfully." });
   } catch (error) {
     console.error("Error booking appointment:", error);
