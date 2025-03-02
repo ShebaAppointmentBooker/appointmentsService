@@ -12,7 +12,7 @@ import Specialization, { ISpecialization } from "../models/specializationModel";
 import mongoose from "mongoose";
 import Patient from "../models/patientModel";
 import Doctor from "../models/doctorModel";
-import transporter from "../tools/mailer"; // Import the transporter
+const transporter = require("../tools/mailer"); // Import the transporter
 import { generateAppointmentEmail } from "../helpers/emailConstructorPatient";
 require("../models/doctorModel");
 require("../models/appointmentTypeModel");
@@ -167,37 +167,23 @@ export const bookAppointment = async (
   req: Request,
   res: Response
 ): Promise<any> => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
     const patientId = typeof req.user === "string" ? req.user : undefined;
     const { appointmentId } = req.body;
 
-    if (!patientId) {
-      return res.status(400).json({ error: "Invalid patient ID." });
-    }
-    if (!appointmentId) {
-      return res.status(400).json({ error: "Appointment ID is required." });
-    }
+    if (!patientId) throw { status: 400, message: "Invalid patient ID." };
+    if (!appointmentId)
+      throw { status: 400, message: "Appointment ID is required." };
 
-    // Fetch the appointment and lock it within the transaction
+    // Fetch the appointment
     const appointment = await Appointment.findById(appointmentId)
       .populate("type")
       .populate("doctor")
-      .populate("subtype")
-      .session(session); // Attach session
+      .populate("subtype");
 
-    if (!appointment) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({ error: "Appointment not found." });
-    }
-    if (appointment.status !== "Available") {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({ error: "Appointment is not available." });
-    }
+    if (!appointment) throw { status: 404, message: "Appointment not found." };
+    if (appointment.status !== "Available")
+      throw { status: 400, message: "Appointment is not available." };
 
     // Convert patientId to ObjectId
     const patientObjectId = new mongoose.Types.ObjectId(patientId);
@@ -205,20 +191,17 @@ export const bookAppointment = async (
     // Update the appointment status and assign the patient
     appointment.status = "Booked";
     appointment.patient = patientObjectId;
-    await appointment.save({ session });
+    await appointment.save();
 
     // Update the patient's appointment list
     const patient = await Patient.findByIdAndUpdate(
       patientObjectId,
       { $push: { appointments: appointment._id } },
-      { session, new: true }
+      { new: true }
     );
 
-    if (!patient || !patient.email) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(500).json({ error: "Patient email not found." });
-    }
+    if (!patient || !patient.email)
+      throw { status: 500, message: "Patient email not found." };
 
     // Generate the email content
     const emailContent = generateAppointmentEmail(patient.name, {
@@ -227,35 +210,42 @@ export const bookAppointment = async (
       specialization: (appointment.type as ISpecialization).name,
     });
 
-    // Send the email **inside the transaction**
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
+    // Try sending the email
+    console.log(patient.email);
+    await transporter.sendMail({
+      from: "liorhospitalfake@gmx.com",
       to: patient.email,
       subject: "Appointment Confirmation",
       html: emailContent,
-    };
-
-    try {
-      await transporter.sendMail(mailOptions);
-    } catch (emailError) {
-      console.error("Error sending email:", emailError);
-      await session.abortTransaction(); // Rollback everything if email fails
-      session.endSession();
-      return res
-        .status(500)
-        .json({ error: "Error sending confirmation email." });
-    }
-
-    // Commit transaction after everything succeeds
-    await session.commitTransaction();
-    session.endSession();
+    });
 
     res.json({ message: "Appointment booked successfully." });
-  } catch (error) {
-    console.error("Error booking appointment:", error);
-    await session.abortTransaction();
-    session.endSession();
-    res.status(500).json({ error: "Internal server error." });
+  } catch (error: any) {
+    console.error("Error booking appointment:", error.message || error);
+
+    // Rollback changes
+    if (error.status !== 400 && error.status !== 404) {
+      console.log("Rolling back appointment booking...");
+
+      const { appointmentId, patientId } = req.body;
+      if (appointmentId) {
+        await Appointment.findByIdAndUpdate(appointmentId, {
+          status: "Available",
+          patient: null,
+        });
+      }
+      if (patientId) {
+        await Patient.findByIdAndUpdate(patientId, {
+          $pull: { appointments: appointmentId },
+        });
+      }
+      console.log("Rolled back appointment booking...");
+    }
+
+    // Send error response
+    res
+      .status(error.status || 500)
+      .json({ error: error.message || "Internal server error." });
   }
 };
 
