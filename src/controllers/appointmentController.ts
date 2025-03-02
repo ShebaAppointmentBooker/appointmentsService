@@ -167,6 +167,9 @@ export const bookAppointment = async (
   req: Request,
   res: Response
 ): Promise<any> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
   try {
     const patientId = typeof req.user === "string" ? req.user : undefined;
     const { appointmentId } = req.body;
@@ -174,70 +177,88 @@ export const bookAppointment = async (
     if (!patientId) {
       return res.status(400).json({ error: "Invalid patient ID." });
     }
-
     if (!appointmentId) {
       return res.status(400).json({ error: "Appointment ID is required." });
     }
 
+    // Fetch the appointment and lock it within the transaction
     const appointment = await Appointment.findById(appointmentId)
-      .populate("type") // Populate the type field (appointment type)
-      .populate("doctor") // Populate the doctor field (if necessary)
-      .populate("subtype"); // Populate the subtype field (if necessary)
+      .populate("type")
+      .populate("doctor")
+      .populate("subtype")
+      .session(session); // Attach session
 
     if (!appointment) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ error: "Appointment not found." });
     }
-
     if (appointment.status !== "Available") {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ error: "Appointment is not available." });
     }
 
     // Convert patientId to ObjectId
     const patientObjectId = new mongoose.Types.ObjectId(patientId);
 
-    // Update the appointment
+    // Update the appointment status and assign the patient
     appointment.status = "Booked";
     appointment.patient = patientObjectId;
-    await appointment.save();
+    await appointment.save({ session });
 
-    // Update the patient with the booked appointment
-    await Patient.findByIdAndUpdate(patientObjectId, {
-      $push: { appointments: appointment._id },
-    });
-    // Fetch patient details for email
-    const patient = await Patient.findById(patientObjectId);
+    // Update the patient's appointment list
+    const patient = await Patient.findByIdAndUpdate(
+      patientObjectId,
+      { $push: { appointments: appointment._id } },
+      { session, new: true }
+    );
+
     if (!patient || !patient.email) {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(500).json({ error: "Patient email not found." });
     }
-    // Generate email content
+
+    // Generate the email content
     const emailContent = generateAppointmentEmail(patient.name, {
       date: appointment.date,
       doctor: (appointment.doctor as IDoctor).name,
       specialization: (appointment.type as ISpecialization).name,
     });
-    // Send email to patient
+
+    // Send the email **inside the transaction**
     const mailOptions = {
-      from: process.env.EMAIL_USER, // Using environment variable for the sender
+      from: process.env.EMAIL_USER,
       to: patient.email,
       subject: "Appointment Confirmation",
       html: emailContent,
     };
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error("Error sending email:", error);
-        return res
-          .status(500)
-          .json({ error: "Error sending confirmation email." });
-      } else {
-        console.log("Email sent: " + info.response);
-      }
-    });
+
+    try {
+      await transporter.sendMail(mailOptions);
+    } catch (emailError) {
+      console.error("Error sending email:", emailError);
+      await session.abortTransaction(); // Rollback everything if email fails
+      session.endSession();
+      return res
+        .status(500)
+        .json({ error: "Error sending confirmation email." });
+    }
+
+    // Commit transaction after everything succeeds
+    await session.commitTransaction();
+    session.endSession();
+
     res.json({ message: "Appointment booked successfully." });
   } catch (error) {
     console.error("Error booking appointment:", error);
+    await session.abortTransaction();
+    session.endSession();
     res.status(500).json({ error: "Internal server error." });
   }
 };
+
 export const cancelAppointment = async (
   req: Request,
   res: Response
