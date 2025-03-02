@@ -12,7 +12,7 @@ import Specialization, { ISpecialization } from "../models/specializationModel";
 import mongoose from "mongoose";
 import Patient from "../models/patientModel";
 import Doctor from "../models/doctorModel";
-const transporter = require("../tools/mailer"); // Import the transporter
+import {transporter} from "../tools/mailer"; // Import the transporter
 import { generateAppointmentEmail } from "../helpers/emailConstructorPatient";
 require("../models/doctorModel");
 require("../models/appointmentTypeModel");
@@ -208,10 +208,11 @@ export const bookAppointment = async (
       date: appointment.date,
       doctor: (appointment.doctor as IDoctor).name,
       specialization: (appointment.type as ISpecialization).name,
+      subtype: (appointment.subtype as IAppointmentType).name,
     });
 
     // Try sending the email
-    console.log(patient.email);
+    
     await transporter.sendMail({
       from: "liorhospitalfake@gmx.com",
       to: patient.email,

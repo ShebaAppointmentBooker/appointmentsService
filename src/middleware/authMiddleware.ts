@@ -26,7 +26,7 @@ export const jwtRequired = (
   const token = authHeader.split(" ")[1];
 
   try {
-    console.log(token)
+    console.log(token,JWT_SECRET)
     const decoded = jwt.verify(token, JWT_SECRET) as {
       userId: string;
     };

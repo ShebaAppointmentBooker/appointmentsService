@@ -1,10 +1,10 @@
+import * as dotenv from 'dotenv'
+dotenv.config();
 import express, { Request, Response } from 'express';
 import mongoose from 'mongoose';
-import * as dotenv from 'dotenv'
 import appointmentRoutes from './routes/appointmentRoutes';
 
 
-dotenv.config();
 
 const app = express();
 app.use(express.json());

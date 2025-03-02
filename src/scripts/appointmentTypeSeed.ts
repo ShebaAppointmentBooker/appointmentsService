@@ -2,7 +2,7 @@ import * as dotenv from 'dotenv';
 import mongoose from 'mongoose';
 import AppointmentType from '../models/appointmentTypeModel'; // Assuming you have an AppointmentType model
 
-dotenv.config();
+// dotenv.config();
 
 // Connect to MongoDB
 const connectDB = async () => {

@@ -2,7 +2,7 @@ export const generateAppointmentEmail = (
   patientName: string,
   appointmentDetails: any
 ) => {
-  const { date, doctor, specialization } = appointmentDetails;
+  const { date, doctor, specialization,subtype } = appointmentDetails;
   return `
     <h2>Appointment Confirmation</h2>
     <p>Dear ${patientName},</p>
@@ -10,8 +10,9 @@ export const generateAppointmentEmail = (
     <p><strong>Appointment Details:</strong></p>
     <ul>
       <li><strong>Date:</strong> ${new Date(date).toLocaleString()}</li>
-      <li><strong>Doctor:</strong> ${doctor.name}</li>
+      <li><strong>Doctor:</strong> ${doctor}</li>
       <li><strong>Specialization:</strong> ${specialization}</li>
+      <li><strong>Appointment Type:</strong> ${subtype}</li>
     </ul>
     <p><strong>Hospital Location:</strong> Sheba Medical Center, Israel</p>
     <p>For directions, please click on the link below to get detailed navigation instructions:</p>
