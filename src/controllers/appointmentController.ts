@@ -142,7 +142,8 @@ export const getAvailableAppointmentsByType = async (
     const appointments = await Appointment.find(query)
       .populate("doctor", "name email")
       .populate("type", "name")
-      .populate("subtype", "name");
+      .populate("subtype", "name")
+      .sort({ date: 1 });
 
     // Format the data for frontend
     const formattedAppointments = appointments.map((appointment) => ({
@@ -249,7 +250,67 @@ export const bookAppointment = async (
       .json({ error: error.message || "Internal server error." });
   }
 };
+export const getPatientAppointments = async (req: Request, res: Response) => {
+  try {
+    const patientId = typeof req.user === "string" ? req.user : undefined;
+    const { happened } = req.body; // "happened" or "didn't happen"
 
+    if (!patientId) {
+      throw { status: 401, message: "Unauthorized: Invalid patient ID." };
+    }
+    if (!happened&&happened!=false) {
+      throw { status: 400, message: "Invalid happened. Use true or false." };
+    }
+
+    // Convert patientId to ObjectId
+    const patientObjectId = new mongoose.Types.ObjectId(patientId);
+
+    // Find the patient and populate their appointments
+    const patient = await Patient.findById(patientObjectId).populate("appointments");
+
+    if (!patient) {
+      throw { status: 404, message: "Patient not found." };
+    }
+
+    const now = new Date(); // Current date and time
+
+    // Define query based on "happened" or "didn't happen"
+    const query: any = {
+      _id: { $in: patient.appointments }, // Get only this patient's appointments
+      date: happened ? { $lt: now } : { $gte: now },
+    };
+
+    if (happened) {
+      query.status = { $in: ["Booked","Completed", "Cancelled"] }; // Only include completed/cancelled ones
+    }
+
+    // Fetch appointments with doctor and type info
+    const appointments = await Appointment.find(query)
+      .populate("doctor", "name email")
+      .populate("type", "name")
+      .populate("subtype", "name")
+      .sort({ date: 1 });
+
+    // Format response
+    const formattedAppointments = appointments.map((appointment) => ({
+      appointmentId: appointment._id,
+      date: appointment.date,
+      doctor: {
+        doctorId: (appointment.doctor as any)._id,
+        name: (appointment.doctor as any).name,
+        email: (appointment.doctor as any).email,
+      },
+      specialization: (appointment.type as any).name,
+      appointmentType: (appointment.subtype as any).name,
+      resolution: happened ? appointment.resolution : undefined, // Include resolution only for past ones
+    }));
+
+    res.json(formattedAppointments);
+  } catch (error:any) {
+    console.error("Error fetching patient appointments:", error);
+    res.status(error?.status || 500).json({ error: error?.message || "Internal server error." });
+  }
+};
 export const cancelAppointment = async (
   req: Request,
   res: Response
