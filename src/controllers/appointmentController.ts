@@ -12,7 +12,7 @@ import Specialization, { ISpecialization } from "../models/specializationModel";
 import mongoose from "mongoose";
 import Patient from "../models/patientModel";
 import Doctor from "../models/doctorModel";
-import {transporter} from "../tools/mailer"; // Import the transporter
+import { transporter } from "../tools/mailer"; // Import the transporter
 import { generateAppointmentEmail } from "../helpers/emailConstructorPatient";
 require("../models/doctorModel");
 require("../models/appointmentTypeModel");
@@ -98,10 +98,13 @@ export const getAvailableAppointmentsByType = async (
         error: "Doctor ID must be a non-empty string if provided.",
       });
     }
-    if (date && isNaN(Date.parse(date))) {
-      return res.status(400).json({
-        error: "Invalid date format. Please provide a valid date string.",
-      });
+    if (date) {
+      const parsedDate = new Date(date);
+      if (isNaN(parsedDate.getTime()) || parsedDate < new Date()) {
+        return res.status(400).json({
+          error: "Invalid date. Please provide a valid future or today’s date.",
+        });
+      }
     }
     // Find the matching AppointmentType by name
     // const appointmentType = await Specialization.findOne({ _id: type });
@@ -111,6 +114,7 @@ export const getAvailableAppointmentsByType = async (
     const query: any = {
       status: "Available",
       type: type,
+      date: { $gte: new Date() },
     };
     if (subtype) {
       // const appointmentSubtype = await AppointmentType.findOne({
@@ -213,7 +217,7 @@ export const bookAppointment = async (
     });
 
     // Try sending the email
-    
+
     await transporter.sendMail({
       from: "liorhospitalfake@gmx.com",
       to: patient.email,
@@ -258,7 +262,7 @@ export const getPatientAppointments = async (req: Request, res: Response) => {
     if (!patientId) {
       throw { status: 401, message: "Unauthorized: Invalid patient ID." };
     }
-    if (!happened&&happened!=false) {
+    if (!happened && happened != false) {
       throw { status: 400, message: "Invalid happened. Use true or false." };
     }
 
@@ -266,7 +270,9 @@ export const getPatientAppointments = async (req: Request, res: Response) => {
     const patientObjectId = new mongoose.Types.ObjectId(patientId);
 
     // Find the patient and populate their appointments
-    const patient = await Patient.findById(patientObjectId).populate("appointments");
+    const patient = await Patient.findById(patientObjectId).populate(
+      "appointments"
+    );
 
     if (!patient) {
       throw { status: 404, message: "Patient not found." };
@@ -281,7 +287,7 @@ export const getPatientAppointments = async (req: Request, res: Response) => {
     };
 
     if (happened) {
-      query.status = { $in: ["Booked","Completed", "Cancelled"] }; // Only include completed/cancelled ones
+      query.status = { $in: ["Booked", "Completed", "Cancelled"] }; // Only include completed/cancelled ones
     }
 
     // Fetch appointments with doctor and type info
@@ -306,9 +312,11 @@ export const getPatientAppointments = async (req: Request, res: Response) => {
     }));
 
     res.json(formattedAppointments);
-  } catch (error:any) {
+  } catch (error: any) {
     console.error("Error fetching patient appointments:", error);
-    res.status(error?.status || 500).json({ error: error?.message || "Internal server error." });
+    res
+      .status(error?.status || 500)
+      .json({ error: error?.message || "Internal server error." });
   }
 };
 export const cancelAppointment = async (
@@ -337,7 +345,12 @@ export const cancelAppointment = async (
         .status(403)
         .json({ error: "Not authorized to cancel this appointment." });
     }
-
+    const now = new Date();
+    if (appointment.date < now) {
+      return res
+        .status(400)
+        .json({ error: "Cannot cancel past appointments." });
+    }
     // Update the appointment status and remove the patient
     appointment.status = "Available";
     appointment.patient = null;
