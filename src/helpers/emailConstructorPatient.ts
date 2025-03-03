@@ -11,7 +11,7 @@ export const generateAppointmentEmail = (
       : `<h2>Appointment Coming Up</h2>`
   }
     <p>Dear ${patientName},</p>
-    ${justBooked ? `<p>Your appointment has been successfully booked.</p>` : ``}
+    ${justBooked ? `<p>Your appointment has been successfully booked.</p>` :  `<p>Your appointment is starting in five minutes.</p>`}
     <p><strong>Appointment Details:</strong></p>
     <ul>
       <li><strong>Date:</strong> ${new Date(date).toLocaleString()}</li>
