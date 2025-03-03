@@ -1,12 +1,17 @@
 export const generateAppointmentEmail = (
   patientName: string,
-  appointmentDetails: any
+  appointmentDetails: any,
+  justBooked = true
 ) => {
-  const { date, doctor, specialization,subtype } = appointmentDetails;
+  const { date, doctor, specialization, subtype } = appointmentDetails;
   return `
-    <h2>Appointment Confirmation</h2>
+  ${
+    justBooked
+      ? `<h2>Appointment Confirmation</h2>`
+      : `<h2>Appointment Coming Up</h2>`
+  }
     <p>Dear ${patientName},</p>
-    <p>Your appointment has been successfully booked.</p>
+    ${justBooked ? `<p>Your appointment has been successfully booked.</p>` : ``}
     <p><strong>Appointment Details:</strong></p>
     <ul>
       <li><strong>Date:</strong> ${new Date(date).toLocaleString()}</li>

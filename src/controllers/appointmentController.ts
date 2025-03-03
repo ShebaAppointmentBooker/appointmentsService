@@ -14,6 +14,7 @@ import Patient from "../models/patientModel";
 import Doctor from "../models/doctorModel";
 import { transporter } from "../tools/mailer"; // Import the transporter
 import { generateAppointmentEmail } from "../helpers/emailConstructorPatient";
+import { scheduleAppointmentReminder } from "../helpers/emailCron";
 require("../models/doctorModel");
 require("../models/appointmentTypeModel");
 export const getAllAppointmentTypes = async (req: Request, res: Response) => {
@@ -224,6 +225,12 @@ export const bookAppointment = async (
       subject: "Appointment Confirmation",
       html: emailContent,
     });
+    try {
+      scheduleAppointmentReminder(appointment, patient);
+      console.log("croned it");
+    } catch {
+      console.log("tried to cron but failed");
+    }
 
     res.json({ message: "Appointment booked successfully." });
   } catch (error: any) {
