@@ -79,7 +79,64 @@ const generateAppointments = async () => {
   process.exit();
 };
 
-generateAppointments().catch((err) => {
-  console.error("Error generating appointments:", err);
+// generateAppointments().catch((err) => {
+//   console.error("Error generating appointments:", err);
+//   process.exit(1);
+// });
+const getDateTenMinutesFromNow = () => {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() + 10);
+  return date;
+};
+// Generate a single new available appointment
+const addImmediateAppointment = async () => {
+  await connectDB();
+  console.log("Fetching doctors and appointment types...");
+
+  const doctors = await Doctor.find().populate("specializations");
+  if (!doctors.length) {
+    console.error("No doctors found!");
+    return;
+  }
+
+  const appointmentTypes = await AppointmentType.find();
+  if (!appointmentTypes.length) {
+    console.error("No appointment types found!");
+    return;
+  }
+
+  // Select a random doctor
+  const doctor = doctors[Math.floor(Math.random() * doctors.length)];
+  const { specializations } = doctor;
+
+  if (!specializations.length) {
+    console.error(`Doctor ${doctor.name} has no specializations.`);
+    return;
+  }
+
+  // Select a random specialization and appointment type
+  const randomSpecialization =
+    specializations[Math.floor(Math.random() * specializations.length)];
+  const randomAppointmentType =
+    appointmentTypes[Math.floor(Math.random() * appointmentTypes.length)];
+
+  // Create the appointment
+  const appointment = new Appointment({
+    doctor: doctor._id,
+    date: getDateTenMinutesFromNow(),
+    type: randomSpecialization,
+    subtype: randomAppointmentType._id,
+    status: "Available",
+  });
+
+  await appointment.save();
+  console.log(
+    `Created new appointment for Dr. ${doctor.name} in 10 minutes (${randomSpecialization}) - ${randomAppointmentType.name}`
+  );
+
+  process.exit();
+};
+addImmediateAppointment().catch((err) => {
+  console.error("Error adding immediate appointment:", err);
   process.exit(1);
 });
